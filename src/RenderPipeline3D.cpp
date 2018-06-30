@@ -39,11 +39,43 @@ RenderPipeline3D::zBufferTest(RASTERIZED_FRAGMENT frag, float depth) {
 }
 
 void
-RenderPipeline3D::shadeFragment(RASTERIZED_FRAGMENT &frag) {
+RenderPipeline3D::shadeFragment(RASTERIZED_FRAGMENT &frag, VEC3 pos_origin) {
     if (texture == nullptr) return;
+    /* diffuse color */
     if (texture->ty == T_CHESS_BOARD) {
         frag.color = getChessBoard(frag.tex_coord, texture->sz, texture->color1, texture->color2);
     }
+    COLOR4 diffuseColor = frag.color;
+    /* 环境反射 漫反射 高光 */
+    if (material != nullptr) {
+        frag.color = {0, 0, 0, 1.0f};
+        for (int i = 0; i < light->size(); ++i) {
+            LIGHT cur_light = (*light)[i];
+            if (!cur_light.mIsEnabled) continue;
+
+            float diffuse = (cur_light.mPosition - pos_origin).normalize() * frag.normal * cur_light.mDiffuseIntensity;
+            if (diffuse < 0) continue;
+            float specular = pow((cur_light.mPosition - pos_origin).normalize()*(camera->position - pos_origin).normalize(),material->specularSmoothLevel) * cur_light.mSpecularIntensity;
+            diffuse = diffuse > 0? diffuse : 0;
+            specular = specular > 0? specular : 0;
+
+            COLOR3 c1;
+            frag.color = frag.color + (COLOR4){diffuseColor.x * cur_light.mAmbientColor.x, 
+                         diffuseColor.y * cur_light.mAmbientColor.y,
+                         diffuseColor.z * cur_light.mAmbientColor.z,
+                         0.0};
+            frag.color = frag.color + diffuseColor * diffuse;
+            c1 = cur_light.mSpecularColor * specular;
+            frag.color = frag.color + (COLOR4){c1.x, c1.y, c1.z, 1.0f};
+        }
+    }
+    // printf("%f %f %f %f\n", frag.color.x, frag.color.y, frag.color.z, frag.color.w);
+#define CUT(x) do { x=x>0?x:0; x=x<1?x:1; } while(0)
+    CUT(frag.color.x);
+    CUT(frag.color.y);
+    CUT(frag.color.z);
+    CUT(frag.color.w);
+#undef CUT
 }
 
 void
@@ -58,6 +90,11 @@ RenderPipeline3D::init(CANVAS *c) {
         zBuffer = new vector<float>;
     else
         zBuffer->clear();
+
+    if (light == nullptr)
+        light = new vector<LIGHT>;
+    else
+        light->clear();
         
     texture = nullptr;
     
@@ -68,6 +105,16 @@ RenderPipeline3D::init(CANVAS *c) {
 void
 RenderPipeline3D::setTexture(TEXTURE *tex) {
     texture = tex;
+}
+
+void
+RenderPipeline3D::setMaterial(MATERIAL *mat) {
+    material = mat;
+}
+
+void
+RenderPipeline3D::addLight(LIGHT l) {
+    light->push_back(l);
 }
 
 /*
@@ -82,6 +129,8 @@ RenderPipeline3D::render(vector<VERTEX3> *vecs) {
     else
         vertex_homo->clear();
     
+    vector<unsigned> *v_homo_origin = new vector<unsigned>;
+    
     /* cam transform */
     MATRIX4 m_cam_space_trans = Math::matrixMul(
         Math::yaw_pitch_roll(-camera->rotation.y, -camera->rotation.x, -camera->rotation.z),
@@ -94,22 +143,28 @@ RenderPipeline3D::render(vector<VERTEX3> *vecs) {
         VERTEX_RENDER cur_v_render;
         VEC4 posH = (VEC4){ cur_v.pos.x, cur_v.pos.y, cur_v.pos.z, 1.0 };
         posH = Math::matrixVecMul(m_cam_space_trans, posH);
-        if (posH.z < camera->nearZ) continue;
+        // if (posH.z < camera->nearZ) continue;
         posH = Math::matrixVecMul(m_homo_space_trans, posH);
         cur_v_render.posH = posH;
         cur_v_render.tex_coord = cur_v.tex_coord;
         cur_v_render.color = cur_v.color;
+        cur_v_render.normal = cur_v.normal;
         vertex_homo->push_back(cur_v_render);
+        v_homo_origin->push_back(i);
     }
 
     /* draw triangles */
     VERTEX_RENDER v1, v2, v3;
+    VERTEX3 vo1, vo2, vo3;
     
     /* travsal all the triangles */
     for (int i = 0; i < vertex_homo->size(); i += 3) {
         v1 = (*vertex_homo)[i];
         v2 = (*vertex_homo)[i+1];
         v3 = (*vertex_homo)[i+2];
+        vo1 = (*vecs)[(*v_homo_origin)[i]];
+        vo2 = (*vecs)[(*v_homo_origin)[i+1]];
+        vo3 = (*vecs)[(*v_homo_origin)[i+2]];
         v1.posH.y = - v1.posH.y;
         v2.posH.y = - v2.posH.y;
         v3.posH.y = - v3.posH.y;
@@ -160,7 +215,16 @@ RenderPipeline3D::render(vector<VERTEX3> *vecs) {
                                  v2.color / v2.posH.z * s + 
                                  v3.color / v3.posH.z * t) * depth;
                 
-                shadeFragment(cur_frag);
+                cur_frag.normal = (v1.normal / v1.posH.z * (1 - s - t) + 
+                                 v2.normal / v2.posH.z * s + 
+                                 v3.normal / v3.posH.z * t) * depth;
+                /* interplate the original position space */
+                
+                VEC3 pos_origin = (vo1.pos / v1.posH.z * (1 - s - t) + 
+                                 vo2.pos / v2.posH.z * s + 
+                                 vo3.pos / v3.posH.z * t) * depth;
+                
+                shadeFragment(cur_frag, pos_origin);
                 
                 fragment->push_back(cur_frag);
                 zBuffer->push_back(depth);
@@ -168,6 +232,7 @@ RenderPipeline3D::render(vector<VERTEX3> *vecs) {
             }
         }
     }
+    delete v_homo_origin;
 }
 
 }

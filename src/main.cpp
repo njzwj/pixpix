@@ -59,24 +59,41 @@ int main() {
     RenderPipeline3D *pipeline = new RenderPipeline3D();
     vector<VERTEX3> vecs;
     TEXTURE *tex = new TEXTURE();
+    LIGHT *lgt = new LIGHT();
+    MATERIAL *mat = new MATERIAL();
+
     pipeline->init(cav);
-    pipeline->camera->position = {0.0, 0.0, -8.0};
-    pipeline->camera->fovY = Math::Pi / 180.0f * 20.0f;
+    pipeline->camera->position = {0.0, 0.0, -4.0};
+    pipeline->camera->fovY = Math::Pi / 180.0f * 60.0f;
+
     tex->ty = T_CHESS_BOARD;
     tex->sz = 6;
     tex->color1 = {0.1, 0.9, 0.3, 1.0};
     tex->color2 = {0.0, 0.1, 0.1, 1.0};
+    
+    lgt->mSpecularIntensity = 1.0f;
+    lgt->mDiffuseIntensity = 0.5f;
+    lgt->mIsEnabled = true;
+    lgt->mAmbientColor = {0.1f, 0.1f, 0.1f};
+    lgt->mSpecularColor = {1.0f, 1.0f, 1.0f};
+    lgt->mPosition = {0.0f, 5.0f, 2.0f};
+
+    mat->specularSmoothLevel = 100;
     for (int i = 0; ; ++i) {
+        // int i = 1;
         pipeline->init(cav);
         tex->color1 = {0.1, 0.9, 0.3, 1.0};
         tex->color2 = {0.0, 0.1, 0.1, 1.0};
         pipeline->setTexture(tex);
-        drawPlane(pipeline, 2.0f, 2.0f, {0.0f,0.0f,0.0f}, {Math::Pi/135.0f*i, Math::Pi/60.0f*i, Math::Pi/224.0f*i});
+        pipeline->setMaterial(mat);
+        lgt->mPosition = {5.0f * cos(Math::Pi/60.0f*i), 1.3f, 5.0f * sin(Math::Pi/60.0f*i)};
+        pipeline->addLight(*lgt);
+        drawPlane(pipeline, 2.0f, 2.0f, {0.0f,0.0f,0.0f}, {Math::Pi/180.0f*30, Math::Pi/180.0f*0.3f*i, 0});
 
-        tex->color1 = {1.0, 0.0, 0.0, 1.0};
-        tex->color2 = {0.0, 0.0, 1.0, 1.0};
-        pipeline->setTexture(tex);
-        drawPlane(pipeline, 2.0f, 2.0f, {0.0f,0.0f,0.0f}, {-Math::Pi/160.0f*i+1.5f, Math::Pi/95.0f*i, -Math::Pi/304.0f*i});
+        // tex->color1 = {1.0, 0.0, 0.0, 1.0};
+        // tex->color2 = {0.0, 0.0, 1.0, 1.0};
+        // pipeline->setTexture(tex);
+        // drawPlane(pipeline, 2.0f, 2.0f, {0.0f,0.0f,0.0f}, {-Math::Pi/160.0f*i+1.5f, Math::Pi/95.0f*i, -Math::Pi/304.0f*i});
 
 
         cli_graph(W, H, cav->img);

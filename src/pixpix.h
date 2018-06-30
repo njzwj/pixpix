@@ -55,6 +55,10 @@ struct VEC3 {
                       z*rhs.x-x*rhs.z,
                       x*rhs.y-y*rhs.x};
     }
+    VEC3 normalize() {
+        float len = sqrt(x*x+y*y+z*z);
+        return (VEC3){x/len, y/len, z/len};
+    }
 };
 
 /* vector 4d */
@@ -112,6 +116,7 @@ struct VERTEX_RENDER {
     VEC4 posH;          /* homogeneous position */
     COLOR4 color;       /* color                */
     VEC2 tex_coord;     /* texture coordinate   */
+    VEC3 normal;
 };
 
 /* Rasterized Fragment for screen space output */
@@ -119,6 +124,7 @@ struct RASTERIZED_FRAGMENT {
     unsigned posX, posY;/* uint position        */
     COLOR4 color;       /* color                */
     VEC2 tex_coord;     /* texture coordinate   */
+    VEC3 normal;
 };
 
 /* Canvas contains width, height and buffer using 8bit depth color */
@@ -163,6 +169,7 @@ public:
 
 };
 
+/* texture */
 enum TEXTURE_TYPE {
     T_CHESS_BOARD,
     T_BITMAP,
@@ -183,6 +190,32 @@ struct TEXTURE {
     };
 };
 
+/* material */
+struct MATERIAL {
+    COLOR3 ambient;
+    COLOR3 diffuse;
+    COLOR3 specular;
+    unsigned specularSmoothLevel;
+    MATERIAL (): ambient( {0,0,0} ), diffuse( {1.0f, 0, 0} ), specular( {1.0f, 1.0f, 1.0f }), specularSmoothLevel(10) {}
+};
+
+/* light */
+struct LIGHT {
+    COLOR3 mAmbientColor;
+    COLOR3 mDiffuseColor;
+    COLOR3 mSpecularColor;
+    VEC3  mPosition;
+    float mSpecularIntensity;
+    float mDiffuseIntensity;
+    bool mIsEnabled;
+    Light() {
+        mSpecularIntensity = 1.0f;
+        mDiffuseIntensity = 0.5f;
+        mIsEnabled = true;
+    }
+};
+
+
 /* ============================================ */
 /*        Renderer, render pipelines            */
 /* ============================================ */
@@ -196,20 +229,24 @@ private:
     vector<VERTEX_RENDER> *vertex_homo;     /* homogeneous vertexes */
     vector<RASTERIZED_FRAGMENT> *fragment;  /* rasterized fragment  */
     vector<float> *zBuffer;                 /* z - buffer           */
+    vector<LIGHT> *light;                   /* lights               */
     CANVAS *cav;
 
     TEXTURE *texture;
+    MATERIAL *material;
     
     void bilinearInterpolation(VEC2, VEC2, VEC2, VEC2, float &, float &);
     COLOR4 getChessBoard(VEC2, unsigned, COLOR4, COLOR4);
     bool zBufferTest(RASTERIZED_FRAGMENT, float);
-    void shadeFragment(RASTERIZED_FRAGMENT &);
+    void shadeFragment(RASTERIZED_FRAGMENT &, VEC3);
 public:
     CAMERA *camera;                         /* camera */
-    RenderPipeline3D():camera(new CAMERA()), vertex_homo(nullptr), fragment(nullptr), zBuffer(nullptr) {}
+    RenderPipeline3D():camera(new CAMERA()), vertex_homo(nullptr), fragment(nullptr), zBuffer(nullptr), light(nullptr) {}
     
     void init(CANVAS *);
     void setTexture(TEXTURE *);
+    void setMaterial(MATERIAL *);
+    void addLight(LIGHT);
     void render(vector<VERTEX3> *);
 };
 
