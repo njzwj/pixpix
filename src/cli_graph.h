@@ -38,6 +38,7 @@ void cli_graph(unsigned w, unsigned h, const unsigned char* img) {
         }
     }
     srect = {0, 0, (short)(w-1), (short)(h-1)};
+
     WriteConsoleOutput(handle_out,                  /* output handle */
                        buf,                         /* buffer */
                        (COORD){(short)w, (short)h}, /* coord size */
