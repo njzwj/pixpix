@@ -74,8 +74,8 @@ Math::projection(float fovY, float aspect_ratio, float nearZ, float farZ) {
     */
     mat.setRow(0, t11, 0.0, 0.0, 0.0);
     mat.setRow(1, 0.0, t22, 0.0, 0.0);
-    mat.setRow(2, 0.0, 0.0, 1.0, 0.0);
-    mat.setRow(3, 0.0, 0.0, 1.0, 0.0);
+    mat.setRow(2, 0.0, 0.0, -1.0, 0.0);
+    mat.setRow(3, 0.0, 0.0, -1.0, 0.0);
     return mat;
 }
 

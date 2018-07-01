@@ -46,6 +46,7 @@ RenderPipeline3D::shadeFragment(RASTERIZED_FRAGMENT &frag, VEC3 pos_origin) {
         frag.color = getChessBoard(frag.tex_coord, texture->sz, texture->color1, texture->color2);
     }
     COLOR4 diffuseColor = frag.color;
+    if (frag.normal * (camera->position - pos_origin).normalize() <= 0) frag.normal = (VEC3){0, 0, 0} - frag.normal;
     /* 环境反射 漫反射 高光 */
     if (material != nullptr) {
         frag.color = {0, 0, 0, 1.0f};
@@ -55,21 +56,33 @@ RenderPipeline3D::shadeFragment(RASTERIZED_FRAGMENT &frag, VEC3 pos_origin) {
 
             float diffuse = (cur_light.mPosition - pos_origin).normalize() * frag.normal * cur_light.mDiffuseIntensity;
             if (diffuse < 0) continue;
-            float specular = pow((cur_light.mPosition - pos_origin).normalize()*(camera->position - pos_origin).normalize(),material->specularSmoothLevel) * cur_light.mSpecularIntensity;
+            /* reflection vector =
+               (->)n + (->)n - (->)v
+            */
+            VEC3 v = (cur_light.mPosition - pos_origin).normalize();
+            v = v / (v * frag.normal);
+            float specular = pow((frag.normal * 2.0f - v).normalize()
+            *(camera->position - pos_origin).normalize(),material->specularSmoothLevel) * cur_light.mSpecularIntensity;
             diffuse = diffuse > 0? diffuse : 0;
             specular = specular > 0? specular : 0;
 
             COLOR3 c1;
+            /* ambient color */
             frag.color = frag.color + (COLOR4){diffuseColor.x * cur_light.mAmbientColor.x, 
                          diffuseColor.y * cur_light.mAmbientColor.y,
                          diffuseColor.z * cur_light.mAmbientColor.z,
                          0.0};
-            frag.color = frag.color + diffuseColor * diffuse;
-            c1 = cur_light.mSpecularColor * specular;
-            frag.color = frag.color + (COLOR4){c1.x, c1.y, c1.z, 1.0f};
+            /* diffuse color */
+            frag.color = frag.color + (COLOR4){diffuseColor.x*cur_light.mDiffuseColor.x,
+                        diffuseColor.y*cur_light.mDiffuseColor.y, 
+                        diffuseColor.z*cur_light.mDiffuseColor.z, 
+                        0} * diffuse;
+            /* specular color */
+            frag.color = frag.color + (COLOR4){cur_light.mSpecularColor.x, 
+                        cur_light.mSpecularColor.y, 
+                        cur_light.mSpecularColor.z, 0} * specular;
         }
     }
-    // printf("%f %f %f %f\n", frag.color.x, frag.color.y, frag.color.z, frag.color.w);
 #define CUT(x) do { x=x>0?x:0; x=x<1?x:1; } while(0)
     CUT(frag.color.x);
     CUT(frag.color.y);
@@ -218,8 +231,7 @@ RenderPipeline3D::render(vector<VERTEX3> *vecs) {
                 cur_frag.normal = (v1.normal / v1.posH.z * (1 - s - t) + 
                                  v2.normal / v2.posH.z * s + 
                                  v3.normal / v3.posH.z * t) * depth;
-                /* interplate the original position space */
-                
+                /* interplate the original position space for perpix lighting */
                 VEC3 pos_origin = (vo1.pos / v1.posH.z * (1 - s - t) + 
                                  vo2.pos / v2.posH.z * s + 
                                  vo3.pos / v3.posH.z * t) * depth;
