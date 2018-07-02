@@ -3,6 +3,7 @@
 
 #include <cmath>
 #include <vector>
+#include <cstdio>
 using namespace std;
 
 namespace pixpix {
@@ -93,7 +94,7 @@ public:
     static MATRIX4 rotationX(float angle);
     static MATRIX4 rotationY(float angle);
     static MATRIX4 rotationZ(float angle);
-    static MATRIX4 yaw_pitch_roll(float yaw, float pitch, float roll);
+    static MATRIX4 pitch_yaw_roll(float pitch, float yaw, float roll);
     static MATRIX4 projection(float fovY, float aspect_ratio, float nearZ, float farZ);
     static MATRIX4 matrixMul(MATRIX4, MATRIX4);
     static VEC4 matrixVecMul(MATRIX4, VEC4);
@@ -164,7 +165,16 @@ public:
     }
 
     void lookAt(float x, float y, float z) {
-        
+        // pitch & yaw
+        float pitch, yaw;
+        float dx = x - position.x, dy = y - position.y, dz = z - position.z;
+        yaw = (float)atan2(dx, dz);
+        pitch = (float)atan2(
+            -dy,
+            sqrt(dx*dx + dz*dz)
+        );
+        // printf("%f %f\n", pitch, yaw);
+        rotation = (VEC3){pitch, yaw, 0.0f};
     }
 
 };

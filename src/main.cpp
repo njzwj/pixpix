@@ -17,7 +17,7 @@ VERTEX3 getVertex(VEC3 pos, VEC2 tex_coord) {
 }
 
 void drawSphere(RenderPipeline3D *pipeline, float r, unsigned w, unsigned h, VEC3 position, VEC3 rotation) {
-    MATRIX4 m_rot = Math::yaw_pitch_roll(rotation.y, rotation.x, rotation.z),
+    MATRIX4 m_rot = Math::pitch_yaw_roll(rotation.y, rotation.x, rotation.z),
             m_trans = Math::translation(position.x, position.y, position.z),
             m_comp = Math::matrixMul(m_trans, m_rot);
     
@@ -77,7 +77,7 @@ void drawPlane(RenderPipeline3D *pipeline, float w, float h, VEC3 position, VEC3
     vertex->push_back(vd);
     vertex->push_back(vb);
 
-    MATRIX4 m_rot = Math::yaw_pitch_roll(rotation.y, rotation.x, rotation.z),
+    MATRIX4 m_rot = Math::pitch_yaw_roll(rotation.y, rotation.x, rotation.z),
             m_trans = Math::translation(position.x, position.y, position.z),
             m_comp = Math::matrixMul(m_trans, m_rot);
 
@@ -111,7 +111,8 @@ int main() {
     MATERIAL *mat = new MATERIAL();
 
     pipeline->init(cav);
-    pipeline->camera->position = {0.0, 0.0, 4.0};
+    pipeline->camera->position = {4.0, 4.0, 4.0};
+    pipeline->camera->lookAt(0, 0, 0);
     pipeline->camera->fovY = Math::Pi / 180.0f * 60.0f;
 
     tex->ty = T_CHESS_BOARD;
@@ -128,7 +129,11 @@ int main() {
     lgt->mPosition = {0.0f, 5.0f, 0.0f};
 
     mat->specularSmoothLevel = 100;
-    for (int i = 30; ; ++i) {
+
+    for (int i = -30; ; ++i) {
+        if (i > 30) i = -30;
+        pipeline->camera->position = {i / 10.0f, i / 10.0f, 4.0f};
+        pipeline->camera->lookAt(0, 0, 0);
         pipeline->init(cav);
         pipeline->setMaterial(mat);
         //lgt->mPosition = {3.0f * cos(Math::Pi/60.0f*i), 3.0f, 3.0f * sin(Math::Pi/60.0f*i)};
@@ -144,8 +149,8 @@ int main() {
         //tex->color1 = {0.1, 0.9, 0.3, 1.0};
         //tex->color2 = {0.0, 0.1, 0.1, 1.0};
         pipeline->setTexture(tex);
-        drawSphere(pipeline, 1.0f, 24, 16, {0,0,0}, {-Math::Pi/30.0f*i,Math::Pi/60.0f*i,Math::Pi/76.0f*i});
-        // drawPlane(pipeline, 2.0f, 2.0f, {0.0f,0.0f,0.0f}, {-Math::Pi/180.0f*3.0f*i, 0, Math::Pi/180.0f*3.0f*i});
+        // drawSphere(pipeline, 1.0f, 24, 16, {0,0,0}, {-Math::Pi/30.0f*i,Math::Pi/60.0f*i,Math::Pi/76.0f*i});
+        drawPlane(pipeline, 3.0f, 3.0f, {0.0f,0.0f,0.0f}, {0, 0, 0});
         // 
         // tex->color1 = {0.1, 0.3, 0.9, 1.0};
         // tex->color2 = {0.0, 0.1, 0.3, 1.0};

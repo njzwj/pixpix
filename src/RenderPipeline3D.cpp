@@ -146,7 +146,7 @@ RenderPipeline3D::render(vector<VERTEX3> *vecs) {
     
     /* cam transform */
     MATRIX4 m_cam_space_trans = Math::matrixMul(
-        Math::yaw_pitch_roll(-camera->rotation.y, -camera->rotation.x, -camera->rotation.z),
+        Math::pitch_yaw_roll(-camera->rotation.x, -camera->rotation.y, -camera->rotation.z),
         Math::translation(-camera->position.x, -camera->position.y, -camera->position.z)
     );
     MATRIX4 m_homo_space_trans = Math::projection(camera->fovY, camera->aspect_ratio, camera->nearZ, camera->farZ);

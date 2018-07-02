@@ -48,12 +48,12 @@ Math::rotationZ(float angle) {
 }
 
 MATRIX4
-Math::yaw_pitch_roll(float yaw, float pitch, float roll) {
+Math::pitch_yaw_roll(float pitch, float yaw, float roll) {
     MATRIX4 rX, rY, rZ, mat;
-    rY = rotationY(yaw);
     rX = rotationX(pitch);
+    rY = rotationY(yaw);
     rZ = rotationZ(roll);
-    mat = matrixMul(rY, matrixMul(rX, rZ));
+    mat = matrixMul(rX, matrixMul(rY, rZ));
     return mat;
 }
 
