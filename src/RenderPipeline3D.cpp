@@ -230,7 +230,7 @@ RenderPipeline3D::render(vector<VERTEX3> *vecs) {
                 VEC2 pos = {(float)x / cav->w * 2.0f - 1.0f, (float)y / cav->h * 2.0f - 1.0f};
                 RASTERIZED_FRAGMENT cur_frag;
                 /* judge if pos is in triangle ABC */
-#define BETWEEN(a, b, c, d) (((b-a)^(d-a))*((d-a)^(c-a))>=0)
+#define BETWEEN(a, b, c, d) (((b-a)^(d-a))*((d-a)^(c-a))>=-1e-6)
                 bool is_in_triangle = 
                     BETWEEN(va, vb, vc, pos) &&
                     BETWEEN(vb, va, vc, pos) &&

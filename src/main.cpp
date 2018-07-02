@@ -28,7 +28,7 @@ void drawSphere(RenderPipeline3D *pipeline, float r, unsigned w, unsigned h, VEC
     for (int i = 0; i < w; ++i) {
         for (int j = 0; j < h; ++j) {
             float theta[] = {d_theta * i, d_theta * (i + 1)};
-            float alpha[] = {-Math::Pi/2.0f+d_alpha * j, -Math::Pi/2.0f+d_alpha * (j + 1)};
+            float alpha[] = {Math::Pi/2.0f-d_alpha * j, Math::Pi/2.0f-d_alpha * (j + 1)};
 #define GPOS(t, a) ((VEC4){ cos(t)*cos(a), sin(t)*cos(a), sin(a), 1.0f })
             VEC3 normal, pos;
             VEC4 normalH, posH;
@@ -55,8 +55,8 @@ void drawSphere(RenderPipeline3D *pipeline, float r, unsigned w, unsigned h, VEC
             vertex->push_back(ver[2]);
             vertex->push_back(ver[3]);
             vertex->push_back(ver[0]);
-            vertex->push_back(ver[1]);
             vertex->push_back(ver[3]);
+            vertex->push_back(ver[1]);
 #undef GPOS
         }
     }
@@ -146,10 +146,13 @@ int main() {
         lgt->mPosition = {-1.0f, -5.0f, 5.0f};
         pipeline->addLight(*lgt);
 
-        //tex->color1 = {0.1, 0.9, 0.3, 1.0};
-        //tex->color2 = {0.0, 0.1, 0.1, 1.0};
+        tex->color1 = {0.2, 0.9, 0.1, 1.0};
+        tex->color2 = {0.0, 0.1, 0.1, 1.0};
         pipeline->setTexture(tex);
-        // drawSphere(pipeline, 1.0f, 24, 16, {0,0,0}, {-Math::Pi/30.0f*i,Math::Pi/60.0f*i,Math::Pi/76.0f*i});
+        drawSphere(pipeline, 1.0f, 12, 6, {0,0,0}, {-Math::Pi/30.0f*i,Math::Pi/60.0f*i,Math::Pi/76.0f*i});
+        tex->color1 = {0.0, 0.2, 0.8, 1.0};
+        tex->color2 = {0.0, 0.0, 0.0, 1.0};
+        pipeline->setTexture(tex);
         drawPlane(pipeline, 3.0f, 3.0f, {0.0f,0.0f,0.0f}, {0, 0, 0});
         // 
         // tex->color1 = {0.1, 0.3, 0.9, 1.0};
