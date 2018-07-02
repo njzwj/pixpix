@@ -53,6 +53,11 @@ RenderPipeline3D::shadeFragment(RASTERIZED_FRAGMENT &frag, VEC3 pos_origin) {
         for (int i = 0; i < light->size(); ++i) {
             LIGHT cur_light = (*light)[i];
             if (!cur_light.mIsEnabled) continue;
+            /* ambient color */
+            frag.color = frag.color + (COLOR4){diffuseColor.x * cur_light.mAmbientColor.x, 
+                         diffuseColor.y * cur_light.mAmbientColor.y,
+                         diffuseColor.z * cur_light.mAmbientColor.z,
+                         0.0};
 
             float diffuse = (cur_light.mPosition - pos_origin).normalize() * frag.normal * cur_light.mDiffuseIntensity;
             if (diffuse < 0) continue;
@@ -67,11 +72,6 @@ RenderPipeline3D::shadeFragment(RASTERIZED_FRAGMENT &frag, VEC3 pos_origin) {
             specular = specular > 0? specular : 0;
 
             COLOR3 c1;
-            /* ambient color */
-            frag.color = frag.color + (COLOR4){diffuseColor.x * cur_light.mAmbientColor.x, 
-                         diffuseColor.y * cur_light.mAmbientColor.y,
-                         diffuseColor.z * cur_light.mAmbientColor.z,
-                         0.0};
             /* diffuse color */
             frag.color = frag.color + (COLOR4){diffuseColor.x*cur_light.mDiffuseColor.x,
                         diffuseColor.y*cur_light.mDiffuseColor.y, 
@@ -165,6 +165,8 @@ RenderPipeline3D::render(vector<VERTEX3> *vecs) {
         vertex_homo->push_back(cur_v_render);
         v_homo_origin->push_back(i);
     }
+
+    /* triangle culling */
 
     /* draw triangles */
     VERTEX_RENDER v1, v2, v3;
