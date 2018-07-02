@@ -168,9 +168,9 @@ public:
         // pitch & yaw
         float pitch, yaw;
         float dx = x - position.x, dy = y - position.y, dz = z - position.z;
-        yaw = (float)atan2(dx, dz);
+        yaw = (float)atan2(-dx, -dz);
         pitch = (float)atan2(
-            -dy,
+            dy,
             sqrt(dx*dx + dz*dz)
         );
         // printf("%f %f\n", pitch, yaw);
@@ -237,6 +237,7 @@ struct LIGHT {
 class RenderPipeline3D {
 private:
     vector<VERTEX_RENDER> *vertex_homo;     /* homogeneous vertexes */
+    vector<VERTEX_RENDER> *vertex_homo_clipped;
     vector<RASTERIZED_FRAGMENT> *fragment;  /* rasterized fragment  */
     vector<float> *zBuffer;                 /* z - buffer           */
     vector<LIGHT> *light;                   /* lights               */
@@ -251,7 +252,7 @@ private:
     void shadeFragment(RASTERIZED_FRAGMENT &, VEC3);
 public:
     CAMERA *camera;                         /* camera */
-    RenderPipeline3D():camera(new CAMERA()), vertex_homo(nullptr), fragment(nullptr), zBuffer(nullptr), light(nullptr) {}
+    RenderPipeline3D():camera(new CAMERA()), vertex_homo(nullptr), fragment(nullptr), zBuffer(nullptr), light(nullptr),  vertex_homo_clipped(nullptr) {}
     
     void init(CANVAS *);
     void setTexture(TEXTURE *);

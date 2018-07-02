@@ -142,8 +142,13 @@ RenderPipeline3D::render(vector<VERTEX3> *vecs) {
     else
         vertex_homo->clear();
     
-    vector<unsigned> *v_homo_origin = new vector<unsigned>;
+    if (vertex_homo_clipped == nullptr)
+        vertex_homo_clipped = new vector<VERTEX_RENDER>;
+    else
+        vertex_homo_clipped->clear();
     
+    vector<unsigned> *v_homo_origin = new vector<unsigned>;
+
     /* cam transform */
     MATRIX4 m_cam_space_trans = Math::matrixMul(
         Math::pitch_yaw_roll(-camera->rotation.x, -camera->rotation.y, -camera->rotation.z),
@@ -156,37 +161,57 @@ RenderPipeline3D::render(vector<VERTEX3> *vecs) {
         VERTEX_RENDER cur_v_render;
         VEC4 posH = (VEC4){ cur_v.pos.x, cur_v.pos.y, cur_v.pos.z, 1.0 };
         posH = Math::matrixVecMul(m_cam_space_trans, posH);
-        // if (posH.z < camera->nearZ) continue;
         posH = Math::matrixVecMul(m_homo_space_trans, posH);
         cur_v_render.posH = posH;
         cur_v_render.tex_coord = cur_v.tex_coord;
         cur_v_render.color = cur_v.color;
         cur_v_render.normal = cur_v.normal;
         vertex_homo->push_back(cur_v_render);
-        v_homo_origin->push_back(i);
     }
 
-    /* triangle culling */
-
-    /* draw triangles */
+    /* culling convex */
     VERTEX_RENDER v1, v2, v3;
     VERTEX3 vo1, vo2, vo3;
-    
-    /* travsal all the triangles */
+    VEC2 va, vb, vc;
+
     for (int i = 0; i < vertex_homo->size(); i += 3) {
         v1 = (*vertex_homo)[i];
         v2 = (*vertex_homo)[i+1];
         v3 = (*vertex_homo)[i+2];
+        /* test if outof homogenuous convex */
+#define ISOUT(v) (v.posH.getx()<-1||v.posH.getx()>1||v.posH.gety()<-1||v.posH.gety()>1||v.posH.z<camera->nearZ||v.posH.z>camera->farZ)
+        if (ISOUT(v1) && ISOUT(v2) && ISOUT(v3)) continue;
+#undef ISOUT
+        /* test if back face */
+        va = {v1.posH.getx(), v1.posH.gety()};
+        vb = {v2.posH.getx(), v2.posH.gety()};
+        vc = {v3.posH.getx(), v3.posH.gety()};
+        /* cull if clock-wise */
+        if (((vb-va)^(vc-va)) <= 0) continue;
+
+        vertex_homo_clipped->push_back(v1);
+        vertex_homo_clipped->push_back(v2);
+        vertex_homo_clipped->push_back(v3);
+        v_homo_origin->push_back(i);
+        v_homo_origin->push_back(i+1);
+        v_homo_origin->push_back(i+2);
+    }
+    
+    /* travsal all the triangles */
+    for (int i = 0; i < vertex_homo_clipped->size(); i += 3) {
+        v1 = (*vertex_homo_clipped)[i];
+        v2 = (*vertex_homo_clipped)[i+1];
+        v3 = (*vertex_homo_clipped)[i+2];
         vo1 = (*vecs)[(*v_homo_origin)[i]];
         vo2 = (*vecs)[(*v_homo_origin)[i+1]];
         vo3 = (*vecs)[(*v_homo_origin)[i+2]];
-        v1.posH.y = - v1.posH.y;
-        v2.posH.y = - v2.posH.y;
+        v1.posH.y = - v1.posH.y;      /* screen coord, left-top (0,0) */
+        v2.posH.y = - v2.posH.y;      /* reverse y to convert into it */
         v3.posH.y = - v3.posH.y;
         /* 2d ref point */
-        VEC2 va = {v1.posH.getx(), v1.posH.gety()},
-             vb = {v2.posH.getx(), v2.posH.gety()},
-             vc = {v3.posH.getx(), v3.posH.gety()};
+        va = {v1.posH.getx(), v1.posH.gety()};
+        vb = {v2.posH.getx(), v2.posH.gety()};
+        vc = {v3.posH.getx(), v3.posH.gety()};
         
         /* calculate bounding box */
         float minX, minY, maxX, maxY;
