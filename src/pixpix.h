@@ -130,7 +130,7 @@ using COLOR4 = VEC4;    /* rgba */
 struct VERTEX3 {
     VEC3 pos;           /* position in 3d space */
     COLOR4 color;       /* rgba color           */
-    VEC3 normal;        /* normal of surface    */
+    // VEC3 normal;        /* normal of surface    */
     VEC2 tex_coord;     /* texture coordinate   */
 };
 
@@ -247,6 +247,20 @@ struct LIGHT {
     }
 };
 
+/* mesh 
+    contains a vertex list and a triangle list using index referring to 
+    the vertexs.
+*/
+struct MESH {
+    vector<VEC3> *verts;                    /* vertex list                    */
+    vector<unsigned> *faceIndex;            /* number of vertexes per face    */
+    vector<unsigned> *vertexIndex;          /* vertex index in the list above */
+    vector<VEC3> *normal;                   /* vertex normal                  */
+    vector<VEC2> *texCoord;                 /* vertex texture coordinates     */
+
+    MESH(): verts(nullptr), faceIndex(nullptr), vertexIndex(nullptr), 
+            normal(nullptr), texCoord(nullptr) {}
+};
 
 /* ============================================ */
 /*        Renderer, render pipelines            */
