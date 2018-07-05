@@ -23,6 +23,7 @@ SOFTWARE.
 #include "pixpix.h"
 #include <cmath>
 #include <cstdio>
+#include <algorithm>
 using namespace std;
 
 namespace pixpix {
@@ -113,8 +114,139 @@ RenderPipeline3D::shadeFragment(RASTERIZED_FRAGMENT &frag, VEC3 pos_origin) {
 #undef CUT
 }
 
+/*!
+    \brief Draw triangle.
+    \param verts: vertex dictionary
+    \param verts_homo: vertex homospace dictionary
+    \param normal: vertex normal dictionary
+    \param tex_coord: vertex texture coordinate dictionary
+    \param tri_verts: triangle vertex index
+*/
 void
-RenderPipeline3D::init(CANVAS *c) {
+RenderPipeline3D::renderTriangle(
+    vector<VEC3> *verts, vector<VEC4> *verts_homo, 
+    vector<VEC3> *normal, vector<VEC2> *tex_coord,
+    vector<unsigned> *tri_verts
+) {
+    /* clip triangle 
+       In this implementation, i just throw the out-of-range triangles out.
+       Also, the face which winds clock-wisely should be thrown out.
+    */
+    bool is_clipped = true;
+    VEC3 v_origin[3];
+    VEC4 v_homo[3];
+    VEC3 v_normal[3];
+    VEC2 v_tex_coord[3];
+    VEC2 v2d[3];
+    for (size_t i = 0; i < 3; ++i) {
+        unsigned v_idx = (*tri_verts)[i];
+        VEC4 v_h = (*verts_homo)[v_idx];
+        v_homo[i] = v_h;
+        v_origin[i] = (*verts)[v_idx];
+        v_tex_coord[i] = (*tex_coord)[i];
+        v_normal[i] = (*normal)[i];
+        
+        float x = v_h.getx(), y = v_h.gety(), z = v_h.z;
+        v2d[i] = (VEC2){x, y};
+        if (x >= -1 && x <= 1 && y >= -1 && y <= 1 && z >= camera->nearZ && z <= camera->farZ) {
+            is_clipped = false;
+        }
+    }
+    if (is_clipped) return;
+    /* winding */
+    if (((v2d[1]-v2d[0])^(v2d[2]-v2d[0])) < 0) return;
+    
+    /* fill triangle */
+    /* triangle bound */
+#define MIN(a,b) ((a)>(b)?(b):(a))
+#define MAX(a,b) ((a)>(b)?(a):(b))
+    float minX=1, minY=1, maxX=-1, maxY=-1;
+    for (size_t i = 0; i < 3; ++i) {
+        minX = MIN(minX, v2d[i].x);
+        minY = MIN(minY, v2d[i].y);
+        maxX = MAX(maxX, v2d[i].x);
+        maxY = MAX(maxY, v2d[i].y);
+    }
+    /*
+     ^ y         O---> x
+     |       ->  |        SCREEN COORDINATE
+     O---> x     v y
+    */
+    minX = (float)(MAX(-1,minX)+1)/2*canvas->w;
+    minY = (float)(-MAX(-1,minY)+1)/2*canvas->h;
+    maxX = (float)(MIN(1,maxX)+1)/2*canvas->w;
+    maxY = (float)(-MIN(1,maxY)+1)/2*canvas->h;
+    swap(minY, maxY);
+#undef MIN
+#undef MAX
+    
+    /* screen coordinate */
+#define TO_SCREEN(v) (VEC2){(float)(v.x+1)/2*canvas->w, (float)(-v.y+1)/2*canvas->h}
+    for (size_t i = 0; i < 3; ++i) {
+        v2d[i] = TO_SCREEN(v2d[i]);
+    }
+#undef TO_SCREEN
+    for (unsigned x = minX; x <= maxX; ++x) {
+        for (unsigned y = minY; y <= maxY; ++y) {
+            VEC2 pos = (VEC2){(float)x, (float)y};
+            /* judge if (x y) is in triangle */
+#define BETWEEN(a, b, c, d) (((b-a)^(d-a))*((d-a)^(c-a))>=-1e-6)
+            bool is_in_triangle = 
+                BETWEEN(v2d[0], v2d[1], v2d[2], pos) &&
+                BETWEEN(v2d[1], v2d[0], v2d[2], pos) &&
+                BETWEEN(v2d[2], v2d[0], v2d[1], pos);
+#undef BETWEEN
+            if (!is_in_triangle) continue;
+            
+            /* interpolation */
+            RASTERIZED_FRAGMENT cur_frag;
+            VEC3 cur_frag_origin;
+            float depth, s, t;
+            bilinearInterpolation(v2d[0], v2d[1], v2d[2], pos, s, t);
+            depth = 1.0f / ((1-s-t)/v_homo[0].z + s/v_homo[1].z + t/v_homo[2].z);
+            cur_frag.posX = x; cur_frag.posY = y;
+            /* z test */
+            if (!zBufferTest(cur_frag, depth)) continue;
+            cur_frag.normal = (v_normal[0]*(1-s-t)/v_homo[0].z + v_normal[1]*s/v_homo[1].z + v_normal[2]*t/v_homo[2].z) * depth;
+            cur_frag.tex_coord = (v_tex_coord[0]*(1-s-t)/v_homo[0].z + v_tex_coord[1]*s/v_homo[1].z + v_tex_coord[2]*t/v_homo[2].z) * depth;
+            cur_frag_origin = (v_origin[0]*(1-s-t)/v_homo[0].z + v_origin[1]*s/v_homo[1].z + v_origin[2]*t/v_homo[2].z) * depth;
+            shadeFragment(cur_frag, cur_frag_origin);
+            fragment->push_back(cur_frag);
+            zBuffer->push_back(depth);
+            canvas->setPixel(cur_frag.posX, cur_frag.posY, cur_frag.color);
+        }
+    }
+}
+
+/*
+    \brief World space -> Homogenous Clipping Space
+    \returns vertexes in homogenous clipping space
+    \param verts: vertexes
+*/
+vector<VEC4> *
+RenderPipeline3D::getVertexClipSpace(vector<VEC3> *verts) {
+    vector<VEC4> *verts_homo = new vector<VEC4>;
+    /* cam transform */
+    MATRIX4 m_cam_space_trans = Math::matrixMul(
+        Math::pitch_yaw_roll(-camera->rotation.x, -camera->rotation.y, -camera->rotation.z),
+        Math::translation(-camera->position.x, -camera->position.y, -camera->position.z)
+    );
+    MATRIX4 m_homo_space_trans = Math::projection(camera->fovY, camera->aspect_ratio, camera->nearZ, camera->farZ);
+
+    for (size_t i = 0; i < verts->size(); ++i) {
+        VEC3 cur_v = (*verts)[i];
+        VEC4 vert4 = (VEC4){cur_v.x, cur_v.y, cur_v.z, 1.0f};
+        vert4 = Math::matrixVecMul(m_cam_space_trans, vert4);
+        vert4.regularize();
+        vert4 = Math::matrixVecMul(m_homo_space_trans, vert4);
+        verts_homo->push_back(vert4);
+    }
+    
+    return verts_homo;
+}
+
+void
+RenderPipeline3D::init() {
     
     if (fragment == nullptr)
         fragment = new vector<RASTERIZED_FRAGMENT>;
@@ -132,9 +264,9 @@ RenderPipeline3D::init(CANVAS *c) {
         light->clear();
         
     texture = nullptr;
+    material = nullptr;
     
-    cav = c;
-    cav->clear();
+    canvas->clear();
 }
 
 void
@@ -148,152 +280,38 @@ RenderPipeline3D::setMaterial(MATERIAL *mat) {
 }
 
 void
-RenderPipeline3D::addLight(LIGHT l) {
-    light->push_back(l);
+RenderPipeline3D::addLight(LIGHT lgt) {
+    light->push_back(lgt);
 }
 
 /*
-    \brief for test use, to validate the 2D & 3D homo triangles drawing.
-           it will generate interpolated rasterized fragments
-    \param v_homo must has 3n elements, representing n triangles.
+    \brief Render 3d object. ONLY triangles are supported.
+    \param mesh: 3d mesh object
 */
-void
-RenderPipeline3D::render(vector<VERTEX3> *vecs) {
-    if (vertex_homo == nullptr)
-        vertex_homo = new vector<VERTEX_RENDER>();
-    else
-        vertex_homo->clear();
+void 
+RenderPipeline3D::render(MESH mesh) {
+    /* vertex_homo */
+    vector<VEC3> *verts = mesh.verts;
+    vector<VEC4> *verts_homo = getVertexClipSpace(verts);
     
-    if (vertex_homo_clipped == nullptr)
-        vertex_homo_clipped = new vector<VERTEX_RENDER>;
-    else
-        vertex_homo_clipped->clear();
-    
-    vector<unsigned> *v_homo_origin = new vector<unsigned>;
-
-    /* cam transform */
-    MATRIX4 m_cam_space_trans = Math::matrixMul(
-        Math::pitch_yaw_roll(-camera->rotation.x, -camera->rotation.y, -camera->rotation.z),
-        Math::translation(-camera->position.x, -camera->position.y, -camera->position.z)
-    );
-    MATRIX4 m_homo_space_trans = Math::projection(camera->fovY, camera->aspect_ratio, camera->nearZ, camera->farZ);
-    /* transform vecs using cam info into homogenous space */
-    for (int i = 0; i < vecs->size(); ++i) {
-        VERTEX3 cur_v = (*vecs)[i];
-        VERTEX_RENDER cur_v_render;
-        VEC4 posH = (VEC4){ cur_v.pos.x, cur_v.pos.y, cur_v.pos.z, 1.0 };
-        posH = Math::matrixVecMul(m_cam_space_trans, posH);
-        posH = Math::matrixVecMul(m_homo_space_trans, posH);
-        cur_v_render.posH = posH;
-        cur_v_render.tex_coord = cur_v.tex_coord;
-        cur_v_render.color = cur_v.color;
-        cur_v_render.normal = cur_v.normal;
-        vertex_homo->push_back(cur_v_render);
-    }
-
-    /* culling convex */
-    VERTEX_RENDER v1, v2, v3;
-    VERTEX3 vo1, vo2, vo3;
-    VEC2 va, vb, vc;
-
-    for (int i = 0; i < vertex_homo->size(); i += 3) {
-        v1 = (*vertex_homo)[i];
-        v2 = (*vertex_homo)[i+1];
-        v3 = (*vertex_homo)[i+2];
-        /* test if outof homogenuous convex */
-#define ISOUT(v) (v.posH.getx()<-1||v.posH.getx()>1||v.posH.gety()<-1||v.posH.gety()>1||v.posH.z<camera->nearZ||v.posH.z>camera->farZ)
-        if (ISOUT(v1) && ISOUT(v2) && ISOUT(v3)) continue;
-#undef ISOUT
-        /* test if back face */
-        va = {v1.posH.getx(), v1.posH.gety()};
-        vb = {v2.posH.getx(), v2.posH.gety()};
-        vc = {v3.posH.getx(), v3.posH.gety()};
-        /* cull if clock-wise */
-        if (((vb-va)^(vc-va)) <= 0) continue;
-
-        vertex_homo_clipped->push_back(v1);
-        vertex_homo_clipped->push_back(v2);
-        vertex_homo_clipped->push_back(v3);
-        v_homo_origin->push_back(i);
-        v_homo_origin->push_back(i+1);
-        v_homo_origin->push_back(i+2);
-    }
-    
-    /* travsal all the triangles */
-    for (int i = 0; i < vertex_homo_clipped->size(); i += 3) {
-        v1 = (*vertex_homo_clipped)[i];
-        v2 = (*vertex_homo_clipped)[i+1];
-        v3 = (*vertex_homo_clipped)[i+2];
-        vo1 = (*vecs)[(*v_homo_origin)[i]];
-        vo2 = (*vecs)[(*v_homo_origin)[i+1]];
-        vo3 = (*vecs)[(*v_homo_origin)[i+2]];
-        v1.posH.y = - v1.posH.y;      /* screen coord, left-top (0,0) */
-        v2.posH.y = - v2.posH.y;      /* reverse y to convert into it */
-        v3.posH.y = - v3.posH.y;
-        /* 2d ref point */
-        va = {v1.posH.getx(), v1.posH.gety()};
-        vb = {v2.posH.getx(), v2.posH.gety()};
-        vc = {v3.posH.getx(), v3.posH.gety()};
-        
-        /* calculate bounding box */
-        float minX, minY, maxX, maxY;
-#define BOUND(a, b, c, mi, mx) do{mi=a>b?b:a;mi=mi>c?c:mi;mx=a>b?a:b;mx=mx>c?mx:c;}while(0)
-        BOUND(va.x,vb.x,vc.x,minX,maxX);
-        BOUND(va.y,vb.y,vc.y,minY,maxY);
-        minX = minX>=-1?minX:-1; minY = minY>=-1?minY:-1;
-        maxX = maxX<1?maxX:1; maxY = maxY<1?maxY:1;
-#undef BOUND
-        minX = (minX + 1.0) * cav->w / 2.0;
-        maxX = (maxX + 1.0) * cav->w / 2.0;
-        minY = (minY + 1.0) * cav->h / 2.0;
-        maxY = (maxY + 1.0) * cav->h / 2.0;
-        for (int y = minY; y < maxY; ++y) {
-            for (int x = minX; x < maxX; ++x) {
-                VEC2 pos = {(float)x / cav->w * 2.0f - 1.0f, (float)y / cav->h * 2.0f - 1.0f};
-                RASTERIZED_FRAGMENT cur_frag;
-                /* judge if pos is in triangle ABC */
-#define BETWEEN(a, b, c, d) (((b-a)^(d-a))*((d-a)^(c-a))>=-1e-6)
-                bool is_in_triangle = 
-                    BETWEEN(va, vb, vc, pos) &&
-                    BETWEEN(vb, va, vc, pos) &&
-                    BETWEEN(vc, va, vb, pos);
-#undef BETWEEN
-                if (!is_in_triangle) continue;
-                /* setup current fragment */
-                cur_frag.posX = x;
-                cur_frag.posY = y;
-                /* screen space interpolation */
-                /* use (->A)+S*(->AB)+T*(->AC) to represent the current point */
-                /* POS=S*(->B)+T*(->C)+(1-S-T)*(->A) */
-                float s, t;
-                bilinearInterpolation(va, vb, vc, pos, s, t);
-                float depth = 1.0 / ((1 - s - t) / v1.posH.z + s / v2.posH.z + t / v3.posH.z);
-                if (!zBufferTest(cur_frag, depth)) continue;
-                cur_frag.tex_coord = (v1.tex_coord / v1.posH.z * (1 - s - t) + 
-                                 v2.tex_coord / v2.posH.z * s + 
-                                 v3.tex_coord / v3.posH.z * t) * depth;
-                
-                cur_frag.color = (v1.color / v1.posH.z * (1 - s - t) + 
-                                 v2.color / v2.posH.z * s + 
-                                 v3.color / v3.posH.z * t) * depth;
-                
-                cur_frag.normal = (v1.normal / v1.posH.z * (1 - s - t) + 
-                                 v2.normal / v2.posH.z * s + 
-                                 v3.normal / v3.posH.z * t) * depth;
-                /* interplate the original position space for perpix lighting */
-                VEC3 pos_origin = (vo1.pos / v1.posH.z * (1 - s - t) + 
-                                 vo2.pos / v2.posH.z * s + 
-                                 vo3.pos / v3.posH.z * t) * depth;
-                
-                shadeFragment(cur_frag, pos_origin);
-                
-                fragment->push_back(cur_frag);
-                zBuffer->push_back(depth);
-                cav->setPixel(cur_frag.posX, cur_frag.posY, cur_frag.color);
-            }
+    /* draw triangle faces */
+    vector<unsigned> *faceIndex = mesh.faceIndex;
+    size_t p = 0;
+    for (size_t i = 0; i < faceIndex->size(); ++i) {
+        vector<unsigned> tri_verts;
+        vector<VEC3> tri_normal;
+        vector<VEC2> tri_tex_coord;
+        tri_verts.clear();
+        tri_normal.clear();
+        tri_tex_coord.clear();
+        for (size_t j = 0; j < (*faceIndex)[i]; ++j, ++p) {
+            tri_verts.push_back((*(mesh.vertexIndex))[p]);
+            tri_normal.push_back((*mesh.normal)[p]);
+            tri_tex_coord.push_back((*mesh.texCoord)[p]);
         }
+        renderTriangle(verts, verts_homo, &tri_normal, &tri_tex_coord, &tri_verts);
     }
-    delete v_homo_origin;
+    delete verts_homo;
 }
 
 }
