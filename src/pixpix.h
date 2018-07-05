@@ -272,29 +272,31 @@ struct MESH {
 */
 class RenderPipeline3D {
 private:
-    vector<VERTEX_RENDER> *vertex_homo;     /* homogeneous vertexes */
-    vector<VERTEX_RENDER> *vertex_homo_clipped;
+    // vector<VERTEX_RENDER> *vertex_homo;     /* homogeneous vertexes */
+    // vector<VERTEX_RENDER> *vertex_homo_clipped;
     vector<RASTERIZED_FRAGMENT> *fragment;  /* rasterized fragment  */
     vector<float> *zBuffer;                 /* z - buffer           */
     vector<LIGHT> *light;                   /* lights               */
-    CANVAS *cav;
+    CAMERA *camera;                         /* camera               */
+    CANVAS *canvas;                         /* pixel - buffer       */
 
     TEXTURE *texture;
     MATERIAL *material;
     
-    void bilinearInterpolation(VEC2, VEC2, VEC2, VEC2, float &, float &);
     COLOR4 getChessBoard(VEC2, unsigned, COLOR4, COLOR4);
+    void bilinearInterpolation(VEC2, VEC2, VEC2, VEC2, float &, float &);
     bool zBufferTest(RASTERIZED_FRAGMENT, float);
     void shadeFragment(RASTERIZED_FRAGMENT &, VEC3);
+    void renderTriangle(vector<VEC3> *verts, vector<VEC4> *verts_homo, vector<VEC3> *normal, vector<VEC2> *tex_coord, vector<unsigned> *tri_verts);
+    vector<VEC4> *getVertexClipSpace(vector<VEC3> *);
 public:
-    CAMERA *camera;                         /* camera */
-    RenderPipeline3D():camera(new CAMERA()), vertex_homo(nullptr), fragment(nullptr), zBuffer(nullptr), light(nullptr),  vertex_homo_clipped(nullptr) {}
+    RenderPipeline3D(CANVAS *cav, CAMERA *cam):camera(cam), canvas(cav), fragment(nullptr), zBuffer(nullptr), light(nullptr) {}
     
-    void init(CANVAS *);
+    void init();
     void setTexture(TEXTURE *);
     void setMaterial(MATERIAL *);
     void addLight(LIGHT);
-    void render(vector<VERTEX3> *);
+    void render(MESH);
 };
 
 }
